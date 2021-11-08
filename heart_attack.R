@@ -189,27 +189,27 @@ n = dim(data)[1]
 #number of bins
 k = 1+3.322*log10(n)
 
-#Age
-summary(data$Age)
-age_0 <- subset(data, HD == 0, select=Age)
+#age
+summary(data$age)
+age_0 <- subset(data, HD == 0, select=age)
 summary(age_0)
-age_1 <- subset(data, HD == 1, select=Age)
+age_1 <- subset(data, HD == 1, select=age)
 summary(age_1)
 
 #binwidth
-h = round(diff(range(data$Age))/k)
+h = round(diff(range(data$age))/k)
 
 #distribution
-ggplot(data, aes(x=Age)) + 
+ggplot(data, aes(x=age)) + 
   geom_histogram(binwidth = h, color="black", fill = "grey")+
-  geom_vline(aes(xintercept=mean(Age)),
+  geom_vline(aes(xintercept=mean(age)),
              color="black", linetype="dashed", size=1)+
-  labs(x = "Age", y="")
+  labs(x = "age", y="")
 
 #relationship between age target variable
-ggplot(data, aes(x=Age, color=HD, fill=HD)) + 
+ggplot(data, aes(x=age, color=HD, fill=HD)) + 
   geom_histogram(binwidth = h, alpha=0.5, position="identity")+
-  labs(x = "Age", y="")
+  labs(x = "age", y="")
 
 #Resting Blood pressure (mmHg)
 summary(data$trestbps)
@@ -303,7 +303,7 @@ ggplot(data, aes(x=oldpeak, color=HD, fill=HD)) +
 ######Box plots for numeric variable ######
 ###########################################
 
-boxplot(Age ~ HD, data = data, xlab = "Heart disease")
+boxplot(age ~ HD, data = data, xlab = "Heart disease")
 boxplot(trestbps ~ HD, data = data, xlab = "Heart disease", ylab = "Resting Blood pressure (mmHg)")
 boxplot(chol ~ HD, data = data, xlab = "Heart disease", ylab = "Serum cholesterol (mg/dL)")
 boxplot(thalach ~ HD, data = data, xlab = "Heart disease", ylab = "Maximum heart rate")
