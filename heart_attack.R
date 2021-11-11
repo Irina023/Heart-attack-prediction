@@ -15,7 +15,7 @@ data <- read.csv("Heart Attack Data Set.csv")
 names(data)[14] <- 'HD'
 
 #Checking for NA values
-apply(is.na(data), 2, which)
+sum(apply(is.na(data), 2, which))
 
 ######################################
 ######## Correlation matrix ##########
@@ -44,7 +44,9 @@ ggplot(data, aes(x = sex, fill = HD)) +
   geom_text(
     aes(label=..count..),
     stat='count',position = position_stack(vjust = 0.5))+
-  labs(x = "Sex",  y="")
+  labs(x = "Sex",  y="")+
+  options(repr.plot.width = 10, repr.plot.height = 4)
+  
   
 
 #percent
@@ -204,12 +206,12 @@ ggplot(data, aes(x=age)) +
   geom_histogram(binwidth = h, color="black", fill = "grey")+
   geom_vline(aes(xintercept=mean(age)),
              color="black", linetype="dashed", size=1)+
-  labs(x = "age", y="")
+  labs(x = "Age", y="")
 
 #relationship between age target variable
 ggplot(data, aes(x=age, color=HD, fill=HD)) + 
   geom_histogram(binwidth = h, alpha=0.5, position="identity")+
-  labs(x = "age", y="")
+  labs(x = "Age", y="")
 
 #Resting Blood pressure (mmHg)
 summary(data$trestbps)
@@ -345,53 +347,86 @@ plotcp(dt_fit, upper = "splits")
 
 prob <- predict(dt_fit, test, type = "prob")
 pred <- ifelse(prob>=0.5,1,0)
-cm<-confusionMatrix(factor(pred[,2]),test$HD)
-cm
-plot(roc(test$HD,pred[,2]), print.auc=TRUE)
+confusionMatrix(factor(pred[,2]),test$HD)
 
+plot(roc(test$HD,pred[,2]), print.auc=TRUE)
+dt_acc <- confusionMatrix(factor(pred[,2]),test$HD)$overall["Accuracy"]
 ###########################################
 ################### GBM ###################
 ###########################################
 
-gbm_fit <- gbm(HD ~ .,
+gbm_fit <- gbm(as.character(HD) ~ .,
                data = train,
-               distribution = "multinomial",
-               cv.folds = 5,
-               shrinkage = .01,
-               n.minobsinnode = 10,
-               n.trees = 200)
+               distribution = 'bernoulli',
+               n.trees=200,
+               shrinkage=0.01)
 print(gbm_fit)
 summary(gbm_fit)
 prob <- predict.gbm(object = gbm_fit,
                     newdata = test,
                     n.trees = 200,
                     type = "response")
-
-pred <- colnames(prob)[apply(prob, 1, which.max)]
-
-cm<-confusionMatrix(factor(pred),test$HD)
-cm
+pred <- as.factor(ifelse(prob>0.5,1,0))
+confusionMatrix(factor(pred),test$HD)
 plot(roc(test$HD,factor(pred, ordered = TRUE)), print.auc=TRUE)
 
+
 #final model
-gbm_fit <- gbm(HD ~ ca+cp+thal+oldpeak+slope+thalach,
+gbm_fit <- gbm(as.character(HD) ~ thal + ca +cp,
                data = train,
-               distribution = "multinomial",
-               cv.folds = 5,
-               shrinkage = .01,
-               n.minobsinnode = 10,
-               n.trees = 200)
+               distribution = 'bernoulli',
+               n.trees=200,
+               shrinkage=0.01)
 print(gbm_fit)
 
 prob <- predict.gbm(object = gbm_fit,
                     newdata = test,
                     n.trees = 200,
                     type = "response")
+pred <- as.factor(ifelse(prob>0.5,1,0))
+confusionMatrix(factor(pred),test$HD)
+plot(roc(test$HD,factor(pred, ordered = TRUE)), print.auc=TRUE)
 
-pred <- colnames(prob)[apply(prob, 1, which.max)]
+gbm_acc <- confusionMatrix(factor(pred, ordered = TRUE),test$HD)$overall["Accuracy"]
 
-cm<-confusionMatrix(factor(pred),test$HD)
-cm
+###########################################
+###### Random forest ##### ################
+###########################################
+
+rf_fit <- randomForest(
+  HD ~ .,
+  data=train
+)
+rf_fit
+
+pred <- predict(rf_fit, test)
+confusionMatrix(factor(pred),test$HD)
+plot(roc(test$HD,factor(pred, ordered = TRUE)), print.auc=TRUE)
+
+rf_cv <- train(HD ~ .,
+               data = train,
+               method = "rf",
+               metric = "Accuracy",
+               tuneLength=10,
+               trControl = trainControl(method = "repeatedcv", number = 5))
+print(rf_cv)
+rf_cv$resample
+varImp(rf_cv)
+accuracy = mean(as.numeric(rf_cv$resample[, 1]))
+accuracy
+
+#final model
+rf_fit <- randomForest(
+  HD ~ exang+slope+cp+ca+oldpeak,
+  data=train,
+  mtry = 2
+)
+rf_fit
+
+pred <- predict(rf_fit, test)
+confusionMatrix(factor(pred),test$HD)
+rf_acc <-confusionMatrix(factor(pred),test$HD)$overall["Accuracy"]
+
 plot(roc(test$HD,factor(pred, ordered = TRUE)), print.auc=TRUE)
 
 ###########################################
@@ -406,14 +441,14 @@ train <- data[index,]
 test <- data[-index,]
 
 
+
 svm_fit <- svm(HD ~ ., data = train, type = 'C-classification', kernel = 'linear')
 print(svm_fit)
 summary(svm_fit)
 
 #confusion matrix
 pred <- predict(svm_fit, test)
-cm<-confusionMatrix(factor(pred),test$HD)
-cm
+confusionMatrix(factor(pred),test$HD)
 #ROC curve
 plot(roc(test$HD,factor(pred, ordered = TRUE)), print.auc=TRUE)
 
@@ -431,7 +466,7 @@ accuracy
 
 
 #final model
-svm_fit <- svm(HD ~ cp+oldpeak+ca+exang+thal, data = train,
+svm_fit <- svm(HD ~ cp + thalach + ca + exang + thal, data = train,
              type = 'C-classification', 
              kernel = 'linear')
 
@@ -439,50 +474,11 @@ print(svm_fit)
 summary(svm_fit)
 
 pred <- predict(svm_fit, test)
-cm<-confusionMatrix(factor(pred),test$HD)
-cm
+confusionMatrix(factor(pred),test$HD)
 plot(roc(test$HD,factor(pred, ordered = TRUE)), print.auc=TRUE)
 
+svm_acc <- confusionMatrix(factor(pred),test$HD)$overall["Accuracy"]
 
-###########################################
-###### Random forest ##### ################
-###########################################
-
-rf_fit <- randomForest(
-  HD ~ .,
-  data=train
-)
-rf_fit
-
-pred <- predict(rf_fit, test)
-cm<-confusionMatrix(factor(pred),test$HD)
-cm
-plot(roc(test$HD,factor(pred, ordered = TRUE)), print.auc=TRUE)
-
-rf_cv <- train(HD ~ .,
-                    data = train,
-                    method = "rf",
-                    metric = "Accuracy",
-                    tuneLength=10,
-                    trControl = trainControl(method = "repeatedcv", number = 5))
-print(rf_cv)
-rf_cv$resample
-varImp(rf_cv)
-accuracy = mean(as.numeric(rf_cv$resample[, 1]))
-accuracy
-
-#final model
-rf_fit <- randomForest(
-  HD ~ exang+slope+cp+ca+oldpeak,
-  data=train,
-  mtry = 2
-)
-rf_fit
-
-pred <- predict(rf_fit, test)
-cm<-confusionMatrix(factor(pred),test$HD)
-cm
-plot(roc(test$HD,factor(pred, ordered = TRUE)), print.auc=TRUE)
 
 ###########################################
 ###### Logistic regression ################
@@ -494,30 +490,22 @@ summary(full_model)
 
 prob <- predict(full_model, test)
 pred <- ifelse(prob>=0.5,1,0)
-cm<-confusionMatrix(factor(pred),test$HD)
-cm
+confusionMatrix(factor(pred),test$HD)
+
 plot(roc(test$HD,pred), print.auc=TRUE)
 
 null_model<-glm(HD~1,data=train,family='binomial')
-logit <- step(full_model, 
+lr_fit <- step(full_model, 
                    scope = list(lower = null_model,
                                 upper = full_model),
                    direction = "backward")
-summary(logit)
-
-prob <- predict(logit, test)
-pred <- ifelse(prob>=0.5,1,0)
-cm<-confusionMatrix(factor(pred),test$HD)
-cm
-plot(roc(test$HD,pred), print.auc=TRUE)
-
-lr_fit<-glm(HD~oldpeak+thal+slope+cp+ca,data=train,family='binomial')
 summary(lr_fit)
 prob <- predict(lr_fit, test)
 pred <- ifelse(prob>=0.5,1,0)
-cm<-confusionMatrix(factor(pred),test$HD)
-cm
+confusionMatrix(factor(pred),test$HD)
+
 plot(roc(test$HD,pred), print.auc=TRUE)
+lr_acc <- confusionMatrix(factor(pred),test$HD)$overall["Accuracy"]
 
 #cross validation
 lr_cv <- train(HD ~ oldpeak+thal+slope+cp+ca, data=train, 
@@ -533,8 +521,8 @@ lr_cv$resample
 
 train_labels <- train[,14]
 pred <- knn(train[,-14], test[,-14], cl=train_labels)
-cm<-confusionMatrix(pred,test$HD)
-cm
+confusionMatrix(pred,test$HD)
+
 plot(roc(test$HD,factor(pred, ordered = TRUE)), print.auc=TRUE)
 
 knn_fit <- train(HD ~.,
@@ -552,9 +540,23 @@ ggplot(data = knn_fit$results, aes(x = k, y = Accuracy, color = 'pink')) +
 
 
 #final model
-pred <- knn(train[c('cp','thalach', 'oldpeak','ca', 'thal','exang','slope')],
-            test[c('cp','thalach', 'oldpeak','ca', 'thal','exang','slope')],
-            cl=train_labels,k=3)
-cm<-confusionMatrix(pred,test$HD)
-cm
+pred <- knn(train[c('cp','thalach','oldpeak','ca','exang','sex')],
+            test[c('cp','thalach','oldpeak','ca','exang','sex')],
+            cl=train_labels,k=5)
+confusionMatrix(pred,test$HD)
+
 plot(roc(test$HD,factor(pred, ordered = TRUE)), print.auc=TRUE)
+knn_acc <- confusionMatrix(pred,test$HD)$overall["Accuracy"]
+
+alg_names <- c("Decision Tree", "GBM", "Random Forest", "SVM", "Logistic Regression", "KNN")
+acc <- c(dt_acc, gbm_acc, rf_acc, svm_acc,  lr_acc, knn_acc)
+df_acc <- data.frame(alg_names, acc)
+
+df_acc$alg_names <- factor(df_acc$alg_names, levels = df_acc$alg_names)
+
+ggplot( mapping = aes(x=df_acc$alg_names)) +
+  geom_bar(aes(y = ..acc.., fill = df_acc$alg_names),width = 0.6,show.legend = FALSE) +
+  geom_text(aes( y = ..acc.., label = scales::percent(..acc..)), stat = "count", vjust = -1)+
+  ylim(0, 1)+
+  labs(y = "Accuracy", x="")
+
