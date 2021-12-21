@@ -9,7 +9,7 @@ library(randomForest)
 library(gbm)
 library(class)
 
-setwd("C:\\Users\\irina\\Desktop\\Kaggle\\heart_attack")
+
 data <- read.csv("Heart Attack Data Set.csv")
 
 names(data)[14] <- 'HD'
